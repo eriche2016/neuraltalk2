@@ -440,7 +440,12 @@ function crit:updateOutput(input, seq)
       end
 
     end
-  end
+end
+  -- added on Jan/2/2016
+  -- the way karpathy defines his loss for a batch input is based the average loss per predictions 
+  -- which is different from my way of defining batch loss. my loss is defined as average by batch size.
+  -- actually here is just the ClassNLLCriterion in torch module. 
+  
   self.output = loss / n -- normalize by number of predictions that were made
   self.gradInput:div(n)
   return self.output
