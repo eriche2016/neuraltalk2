@@ -440,7 +440,10 @@ function crit:updateOutput(input, seq)
       end
 
     end
-  end
+end
+  -- added on Jan/2/2016, the way karpathy defined his batch loss is actually the average loss of all the predictions in a batch  
+  -- which is different from the way of my defining of loss, my batch loss is the summation of all the loss divied by 
+  -- batch_size 
   self.output = loss / n -- normalize by number of predictions that were made
   self.gradInput:div(n)
   return self.output
