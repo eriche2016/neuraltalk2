@@ -38,30 +38,47 @@ def prepro_captions(imgs):
   # preprocess all the captions
   print 'example processed tokens:'
   for i,img in enumerate(imgs):
+    # 为每一个img建立一个新的field， 该field包含预处理后tokens
     img['processed_tokens'] = []
     for j,s in enumerate(img['captions']):
+      #translate：对于string对象， 第一个参数设为None， 就是删除string中出现的后面的字符, 这里是删掉标点符号
+      #strip([chars])：Returns a copy of the string with the leading and trailing characters removed，
+      #                if empty arguments, remove space， 这里是删掉最前和最后出现的空格
+      # split([sep])：Returns a list of the words in the string, separated by the delimiter string. 
+      #               参数为空， 则默认为空格切分， 注意返回的是一个list
       txt = str(s).lower().translate(None, string.punctuation).strip().split()
       img['processed_tokens'].append(txt)
+      # 打印前10个图像， 每个图像对应的第一个caption的处理后的切分结果
       if i < 10 and j == 0: print txt
 
+# 构建caption的相关字典
 def build_vocab(imgs, params):
+  # 统计构建字典的单词频率阈值
   count_thr = params['word_count_threshold']
 
   # count up the number of words
-  counts = {}
+  counts = {}  # dict
   for img in imgs:
     for txt in img['processed_tokens']:
       for w in txt:
+        # 统计出现个数， w是字典counts的一个key
         counts[w] = counts.get(w, 0) + 1
+  # 列表推导， 由counts字典得到新的字典， 此时键变成了count， 并
+  # 按照count进行从大到小排序
   cw = sorted([(count,w) for w,count in counts.iteritems()], reverse=True)
   print 'top words and their counts:'
+  #　str函数： Returns a string containing a printable representation of an object
   print '\n'.join(map(str,cw[:20]))
 
   # print some stats
+  # 所有word的个数
   total_words = sum(counts.itervalues())
   print 'total words:', total_words
+  # 将会被视为UNK字符
   bad_words = [w for w,n in counts.iteritems() if n <= count_thr]
+  # 最终的字典，注：字典的每一个字符出现的次数大于一个阈值
   vocab = [w for w,n in counts.iteritems() if n > count_thr]
+  # UNK字符出现的次数
   bad_count = sum(counts[w] for w in bad_words)
   print 'number of bad words: %d/%d = %.2f%%' % (len(bad_words), len(counts), len(bad_words)*100.0/len(counts))
   print 'number of words in vocab would be %d' % (len(vocab), )
