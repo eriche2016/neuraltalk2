@@ -11,10 +11,10 @@ This script reads this json, does some basic preprocessing on the captions
 
 Output: a json file and an hdf5 file
 The hdf5 file contains several fields:
-/images is (N,3,256,256) uint8 array of raw image data in RGB format
+/images is (N,3,256,256) uint8 array of raw image data in RGB format， N是总共image的数目
 /labels is (M,max_length) uint32 array of encoded labels, zero padded
 /label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the 
-  first and last indices (in range 1..M) of labels for each image
+  first and last indices (in range 1..M) of labels for each image，描述一副图像所用的captions的范围位置
 /label_length stores the length of the sequence for each of the M sequences
 
 The json file has a dict that contains:
@@ -72,6 +72,7 @@ def build_vocab(imgs, params):
 
   # print some stats
   # 所有word的个数
+  # dict.itervalues(): Returns an iterator over the dictionary’s values.
   total_words = sum(counts.itervalues())
   print 'total words:', total_words
   # 将会被视为UNK字符
@@ -85,7 +86,7 @@ def build_vocab(imgs, params):
   print 'number of UNKs: %d/%d = %.2f%%' % (bad_count, total_words, bad_count*100.0/total_words)
 
   # lets look at the distribution of lengths as well
-  sent_lengths = {}
+  sent_lengths = {} # dict which stores element like (nw, count)
   for img in imgs:
     for txt in img['processed_tokens']:
       nw = len(txt)
@@ -98,19 +99,24 @@ def build_vocab(imgs, params):
     print '%2d: %10d   %f%%' % (i, sent_lengths.get(i,0), sent_lengths.get(i,0)*100.0/sum_len)
 
   # lets now produce the final annotations
+  # 将UNK插入到字典中
   if bad_count > 0:
     # additional special UNK token we will use below to map infrequent words to
     print 'inserting the special UNK token'
     vocab.append('UNK')
   
+  # 进一步处理图像的caption，生成每个图像最终的caption
   for img in imgs:
-    img['final_captions'] = []
+    # 创建一个新的field， 存放最终的caption
+    img['final_captions'] = []  # list
     for txt in img['processed_tokens']:
+      # 将caption中单词小于一定阈值的单词替换成UNK token
       caption = [w if counts.get(w,0) > count_thr else 'UNK' for w in txt]
       img['final_captions'].append(caption)
 
   return vocab
-
+  
+# 划分训练集， 分配出训练集， 测试集， 验证集
 def assign_splits(imgs, params):
   num_val = params['num_val']
   num_test = params['num_test']
@@ -134,36 +140,42 @@ def encode_captions(imgs, params, wtoi):
   """
 
   max_length = params['max_length']
-  N = len(imgs)
-  M = sum(len(img['final_captions']) for img in imgs) # total number of captions
+  N = len(imgs)  # 图像的总数目
+  M = sum(len(img['final_captions']) for img in imgs) # total number of captions， 约为N的5倍
 
   label_arrays = []
   label_start_ix = np.zeros(N, dtype='uint32') # note: these will be one-indexed
   label_end_ix = np.zeros(N, dtype='uint32')
-  label_length = np.zeros(M, dtype='uint32')
+  
+  label_length = np.zeros(M, dtype='uint32') 
+  
   caption_counter = 0
-  counter = 1
+  counter = 1   
   for i,img in enumerate(imgs):
-    n = len(img['final_captions'])
+    n = len(img['final_captions'])  # img具有的captions的个数
     assert n > 0, 'error: some image has no captions'
 
     Li = np.zeros((n, max_length), dtype='uint32')
     for j,s in enumerate(img['final_captions']):
+      # label_length[0], label_length[1], ...
       label_length[caption_counter] = min(max_length, len(s)) # record the length of this sequence
       caption_counter += 1
       for k,w in enumerate(s):
+        # 确保Li长度小于规定的最大的长度，超过部分即切断
         if k < max_length:
           Li[j,k] = wtoi[w]
 
     # note: word indices are 1-indexed, and captions are padded with zeros
     label_arrays.append(Li)
+    # 比如， counter = 1， 1+5-1， 更新counter为6
     label_start_ix[i] = counter
     label_end_ix[i] = counter + n - 1
     
     counter += n
   
-  L = np.concatenate(label_arrays, axis=0) # put all the labels together
+  L = np.concatenate(label_arrays, axis=0) # put all the labels together， along dimension 0 
   assert L.shape[0] == M, 'lengths don\'t match? that\'s weird'
+  # 判断label_length 
   assert np.all(label_length > 0), 'error: some caption had no words?'
 
   print 'encoded captions to array of size ', `L.shape`
@@ -219,20 +231,21 @@ def main(params):
   print 'wrote ', params['output_h5']
 
   # create output json file
-  out = {}
+  out = {}  # dict 
   out['ix_to_word'] = itow # encode the (1-indexed) vocab
   out['images'] = []
   for i,img in enumerate(imgs):
     
-    jimg = {}
+    jimg = {}  # dict 
     jimg['split'] = img['split']
     if 'file_path' in img: jimg['file_path'] = img['file_path'] # copy it over, might need
     if 'id' in img: jimg['id'] = img['id'] # copy over & mantain an id, if present (e.g. coco ids, useful)
     
     out['images'].append(jimg)
-  
+  # dump dict out to file params['output_json']
   json.dump(out, open(params['output_json'], 'w'))
   print 'wrote ', params['output_json']
+
 
 if __name__ == "__main__":
 
