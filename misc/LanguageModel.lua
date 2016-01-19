@@ -20,15 +20,20 @@ function layer:__init(opt)
   -- options for Language Model
   self.seq_length = utils.getopt(opt, 'seq_length')
   -- create the core lstm network. note +1 for both the START and END tokens
+  -- 语言模型的核心网络就是LSTM
+  -- 其实里面有linear层
   self.core = LSTM.lstm(self.input_encoding_size, self.vocab_size + 1, self.rnn_size, self.num_layers, dropout)
+  -- embedding层
   self.lookup_table = nn.LookupTable(self.vocab_size + 1, self.input_encoding_size)
   self:_createInitState(1) -- will be lazily resized later during forward passes
 end
 
+-- 构建LSTM训练时需要的状态
 function layer:_createInitState(batch_size)
   assert(batch_size ~= nil, 'batch size must be provided')
   -- construct the initial state for the LSTM
-  if not self.init_state then self.init_state = {} end -- lazy init
+  if not self.init_state then self.init_state = {} end -- lazy init as an empty table 
+  -- 假定网络的层数是num_layers， 则每层都需要prev_c, prev_h 
   for h=1,self.num_layers*2 do
     -- note, the init state Must be zeros because we are using init_state to init grads in backward call too
     if self.init_state[h] then
@@ -39,6 +44,7 @@ function layer:_createInitState(batch_size)
       self.init_state[h] = torch.zeros(batch_size, self.rnn_size)
     end
   end
+  -- 如果number_layers == 1， 则self.num_state = 2 
   self.num_state = #self.init_state
 end
 
@@ -48,15 +54,20 @@ function layer:createClones()
   self.clones = {self.core}
   self.lookup_tables = {self.lookup_table}
   for t=2,self.seq_length+2 do
+    -- shared weights 
     self.clones[t] = self.core:clone('weight', 'bias', 'gradWeight', 'gradBias')
     self.lookup_tables[t] = self.lookup_table:clone('weight', 'gradWeight')
   end
+  -- now self.clones = {lstm1, lstm2_copy, ..., lstm$self.seq_length+2$_copy}
+  -- self.lookup_tables = {lookup_table1, ...., lookup_table$self.seq_length+2$_copy} 
 end
 
+-- 返回语言模型的table list， 主要有两个而已， 其他都是clone，当然是shared weight 
 function layer:getModulesList()
   return {self.core, self.lookup_table}
 end
 
+-- 获取模型参数的接口
 function layer:parameters()
   -- we only have two internal modules, return their params
   local p1,g1 = self.core:parameters()
@@ -73,7 +84,7 @@ function layer:parameters()
   -- todo: invalidate self.clones if params were requested?
   -- what if someone outside of us decided to call getParameters() or something?
   -- (that would destroy our parameter sharing because clones 2...end would point to old memory)
-
+  
   return params, grad_params
 end
 
