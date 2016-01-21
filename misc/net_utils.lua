@@ -172,6 +172,7 @@ function net_utils.decode_sequence(ix_to_word, seq)
     local txt = ''
     for j=1,D do
       local ix = seq[{j,i}]
+      -- 注意键值是字符串， 如'1', '2'等等
       local word = ix_to_word[tostring(ix)]
       if not word then break end -- END token, likely. Or null token
       if j >= 2 then txt = txt .. ' ' end
